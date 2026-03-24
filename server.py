@@ -30,6 +30,8 @@ def get_or_create_session(session_id: str, cwd: str = "") -> dict:
             "events": [],
             "tool_calls": {},       # tool_use_id -> ToolCall
             "pending_agent_dispatch": None,  # for parent inference
+            "skills": [],           # list of {name, invoked_at}
+            "tasks": {},            # task_id -> {subject, status, ...}
         }
     s = sessions[session_id]
     if cwd and not s["cwd"]:
@@ -206,6 +208,28 @@ def compute_metrics(session: dict) -> dict:
     }
 
 
+def _tool_short_summary(tool_name: str, tool_input: dict) -> str:
+    """Short summary of a tool call for task operation log."""
+    if tool_name == "Grep":
+        return f'搜索 "{tool_input.get("pattern", "")[:40]}"'
+    elif tool_name == "Read":
+        fp = tool_input.get("file_path", "")
+        return f'读取 {fp.split("/")[-1] if "/" in fp else fp}'
+    elif tool_name == "Edit":
+        fp = tool_input.get("file_path", "")
+        return f'编辑 {fp.split("/")[-1] if "/" in fp else fp}'
+    elif tool_name == "Write":
+        fp = tool_input.get("file_path", "")
+        return f'写入 {fp.split("/")[-1] if "/" in fp else fp}'
+    elif tool_name == "Bash":
+        return f'$ {tool_input.get("command", "")[:50]}'
+    elif tool_name == "Agent":
+        return f'派发 Agent: {tool_input.get("prompt", "")[:40]}'
+    elif tool_name == "Glob":
+        return f'搜索文件 "{tool_input.get("pattern", "")[:30]}"'
+    return tool_name
+
+
 # ---------------------------------------------------------------------------
 # Event processing
 # ---------------------------------------------------------------------------
@@ -274,6 +298,56 @@ def process_event(data: dict) -> dict:
             session["pending_agent_dispatch"] = "main"
         elif tool_name == "Agent" and agent_id != "main":
             session["pending_agent_dispatch"] = agent_id
+
+        # Track skills
+        if tool_name == "Skill":
+            skill_name = tool_input.get("skill", tool_input.get("name", "unknown"))
+            # Avoid duplicates
+            existing = [s["name"] for s in session["skills"]]
+            if skill_name not in existing:
+                session["skills"].append({"name": skill_name, "invoked_at": now, "agent_id": agent_id})
+
+        # Track tasks
+        if tool_name == "TaskCreate":
+            task_id = f"task-{len(session['tasks']) + 1}"
+            session["tasks"][task_id] = {
+                "task_id": task_id,
+                "subject": tool_input.get("subject", ""),
+                "description": tool_input.get("description", ""),
+                "status": "pending",
+                "created_at": now,
+                "updated_at": now,
+                "agent_id": agent_id,
+                "operations": [],
+            }
+        elif tool_name == "TaskUpdate":
+            tid = tool_input.get("taskId", "")
+            # Match by taskId (could be "1", "2", etc.)
+            match_key = None
+            for k, t in session["tasks"].items():
+                if k == tid or k == f"task-{tid}" or t["task_id"] == tid:
+                    match_key = k
+                    break
+            if match_key:
+                task = session["tasks"][match_key]
+                if tool_input.get("status"):
+                    task["status"] = tool_input["status"]
+                if tool_input.get("subject"):
+                    task["subject"] = tool_input["subject"]
+                if tool_input.get("description"):
+                    task["description"] = tool_input["description"]
+                task["updated_at"] = now
+
+        # Link tool calls to the current in-progress task
+        if tool_name not in ("TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "Skill"):
+            for t in session["tasks"].values():
+                if t["status"] == "in_progress":
+                    t["operations"].append({
+                        "tool_name": tool_name,
+                        "summary": _tool_short_summary(tool_name, tool_input),
+                        "at": now,
+                        "agent_id": agent_id,
+                    })
 
         # Track context for audit
         track_context(session, agent_id, tool_name, tool_input)
@@ -416,6 +490,20 @@ async def handle_session_detail(request: web.Request) -> web.Response:
             "agent_type": e.get("agent_type", ""),
         })
 
+    # Tasks list
+    tasks_list = []
+    for t in s["tasks"].values():
+        tasks_list.append({
+            "task_id": t["task_id"],
+            "subject": t["subject"],
+            "description": t["description"],
+            "status": t["status"],
+            "created_at": t["created_at"],
+            "updated_at": t["updated_at"],
+            "agent_id": t.get("agent_id", "main"),
+            "operations": t.get("operations", [])[-50:],  # last 50
+        })
+
     return web.json_response({
         "session_id": s["session_id"],
         "cwd": s["cwd"],
@@ -424,6 +512,8 @@ async def handle_session_detail(request: web.Request) -> web.Response:
         "agents": agents_list,
         "events": events_list,
         "metrics": compute_metrics(s),
+        "skills": s.get("skills", []),
+        "tasks": tasks_list,
     })
 
 

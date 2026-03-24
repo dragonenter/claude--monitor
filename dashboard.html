@@ -320,6 +320,50 @@ body {
   font-size: 12px; color: var(--text-muted); text-transform: uppercase;
   letter-spacing: .8px; margin-bottom: 10px; font-weight: 700;
 }
+
+/* ---- Skills & Tasks ---- */
+.skill-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  background: linear-gradient(135deg, #8957e522, #1f6feb22);
+  border: 1px solid #8957e533; color: var(--purple); margin: 3px;
+}
+.skill-tag .skill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--purple); }
+
+.task-card {
+  padding: 14px; background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: 10px; margin-bottom: 10px; transition: all .15s;
+}
+.task-card:hover { border-color: var(--blue); }
+.task-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.task-status {
+  padding: 3px 10px; border-radius: 6px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.ts-pending { background: var(--bg-tertiary); color: var(--text-muted); }
+.ts-in_progress { background: #0d281866; color: var(--green); border: 1px solid #23863633; }
+.ts-completed { background: #1f6feb22; color: var(--blue); border: 1px solid #1f6feb33; }
+.ts-deleted { background: #3d0e0e44; color: var(--red); border: 1px solid #f8514922; text-decoration: line-through; }
+.task-subject { font-size: 14px; font-weight: 600; flex: 1; }
+.task-desc { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.5; }
+
+.task-ops { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
+.task-op {
+  display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 11px;
+  color: var(--text-secondary);
+}
+.task-op .trace-icon { width: 16px; height: 16px; font-size: 8px; }
+.task-op-time { color: var(--text-muted); font-size: 10px; width: 40px; flex-shrink: 0; }
+
+.task-progress-bar {
+  height: 6px; background: var(--bg-tertiary); border-radius: 3px;
+  overflow: hidden; margin-top: 10px;
+}
+.task-progress-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--green), var(--blue));
+  transition: width .4s ease;
+}
 </style>
 </head>
 <body>
@@ -353,6 +397,7 @@ body {
       <button class="center-tab active" onclick="switchCenterTab(this,'view-feed')">事件流</button>
       <button class="center-tab" onclick="switchCenterTab(this,'view-trace')">调用链追踪</button>
       <button class="center-tab" onclick="switchCenterTab(this,'view-audit')">上下文审计</button>
+      <button class="center-tab" onclick="switchCenterTab(this,'view-plan')">任务计划</button>
     </div>
     <div class="center-view active" id="view-feed">
       <div id="eventFeed">
@@ -375,6 +420,14 @@ body {
         <div class="empty-state">
           <div class="empty-state-icon">&#9670;</div>
           <div class="empty-state-text">上下文审计<br>分析 Subagent 接收到的上下文完整度</div>
+        </div>
+      </div>
+    </div>
+    <div class="center-view" id="view-plan">
+      <div id="planView">
+        <div class="empty-state">
+          <div class="empty-state-icon">&#9744;</div>
+          <div class="empty-state-text">任务计划<br>展示 Skills 和任务执行进度</div>
         </div>
       </div>
     </div>
@@ -825,11 +878,101 @@ function renderMetrics(session) {
   alertsEl.innerHTML = alerts || '<div style="font-size:12px;color:var(--text-muted)">暂无告警</div>';
 }
 
+// =========================================================================
+// Render: Plan View (Skills + Tasks)
+// =========================================================================
+function renderPlanView(session) {
+  const el = document.getElementById('planView');
+  if (!session) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#9744;</div><div class="empty-state-text">暂无数据</div></div>';
+    return;
+  }
+
+  const skills = session.skills || [];
+  const tasks = session.tasks || [];
+  let html = '';
+
+  // Skills section
+  html += `<div class="section-card">
+    <div class="section-card-title">已加载 Skills</div>`;
+  if (skills.length === 0) {
+    html += `<div style="font-size:12px;color:var(--text-muted);padding:8px 0">当前会话未使用 Skill</div>`;
+  } else {
+    html += `<div style="display:flex;flex-wrap:wrap;gap:4px">`;
+    skills.forEach(s => {
+      html += `<div class="skill-tag"><div class="skill-dot"></div>${escHtml(s.name)}</div>`;
+    });
+    html += `</div>`;
+  }
+  html += `</div>`;
+
+  // Tasks section
+  html += `<div class="section-card">
+    <div class="section-card-title">任务计划</div>`;
+
+  if (tasks.length === 0) {
+    html += `<div style="font-size:12px;color:var(--text-muted);padding:8px 0">当前会话未创建任务</div>`;
+  } else {
+    // Progress bar
+    const completed = tasks.filter(t => t.status === 'completed').length;
+    const total = tasks.filter(t => t.status !== 'deleted').length;
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+    html += `<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <span style="font-size:24px;font-weight:700;color:var(--blue)">${completed}/${total}</span>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px">整体进度 ${pct}%</div>
+        <div class="task-progress-bar"><div class="task-progress-fill" style="width:${pct}%"></div></div>
+      </div>
+    </div>`;
+
+    // Task cards
+    tasks.forEach((t, idx) => {
+      const statusMap = {pending:'待执行', in_progress:'执行中', completed:'已完成', deleted:'已删除'};
+      const statusCls = `ts-${t.status}`;
+      const ops = t.operations || [];
+      const base = session.started_at;
+
+      html += `<div class="task-card">
+        <div class="task-card-header">
+          <span class="task-status ${statusCls}">${statusMap[t.status] || t.status}</span>
+          <span class="task-subject">${escHtml(t.subject)}</span>
+        </div>`;
+
+      if (t.description) {
+        html += `<div class="task-desc">${escHtml(t.description)}</div>`;
+      }
+
+      // Operations log
+      if (ops.length > 0) {
+        html += `<div class="task-ops">
+          <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;font-weight:600">执行的操作 (${ops.length})</div>`;
+        ops.slice(-20).forEach(op => {
+          html += `<div class="task-op">
+            <span class="task-op-time">${fmtTime(op.at, base)}</span>
+            <div class="trace-icon ${toolIcon(op.tool_name)}">${toolLetter(op.tool_name)}</div>
+            <span>${escHtml(op.summary)}</span>
+          </div>`;
+        });
+        if (ops.length > 20) {
+          html += `<div class="task-op" style="color:var(--text-muted)">... 还有 ${ops.length - 20} 个操作</div>`;
+        }
+        html += `</div>`;
+      }
+
+      html += `</div>`;
+    });
+  }
+  html += `</div>`;
+
+  el.innerHTML = html;
+}
+
 function renderAll(session) {
   renderAgentTree(session);
   renderEventFeed(session);
   renderTraceView(session);
   renderAuditView(session);
+  renderPlanView(session);
   renderMetrics(session);
 
   const badge = document.getElementById('statusBadge');
