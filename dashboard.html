@@ -518,6 +518,15 @@ body {
 
   <!-- Right: Metrics -->
   <div class="panel panel-right" id="panelRight">
+    <!-- Session info -->
+    <div class="panel-title">会话信息</div>
+    <div class="metric-card" id="sessionInfoCard" style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--text-muted)">模型</div>
+      <div style="font-size:13px;font-weight:600;margin-top:2px" id="mModel">-</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">用户需求</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;line-height:1.5;max-height:60px;overflow:hidden" id="mUserPrompt">-</div>
+    </div>
+
     <div class="panel-title">监控指标</div>
     <div id="metricsPanel">
       <div class="metric-row">
@@ -542,15 +551,22 @@ body {
           <div class="metric-sub" id="mEfficiency">-</div>
         </div>
       </div>
-      <div class="metric-card">
-        <div class="metric-label">运行时长</div>
-        <div class="metric-value" style="color:var(--text-secondary)" id="mDuration">0s</div>
+      <div class="metric-row">
+        <div class="metric-card">
+          <div class="metric-label">运行时长</div>
+          <div class="metric-value" style="color:var(--text-secondary)" id="mDuration">0s</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Token 估算</div>
+          <div class="metric-value" style="color:var(--yellow)" id="mTokens">-</div>
+          <div class="metric-sub" id="mTokensSub">-</div>
+        </div>
       </div>
 
       <div class="panel-title" style="margin-top:16px">Agent 负载</div>
       <div id="agentBars"></div>
 
-      <div class="panel-title" style="margin-top:16px">告警</div>
+      <div class="panel-title" style="margin-top:16px">错误 &amp; 告警</div>
       <div id="alertsPanel"><div style="font-size:12px;color:var(--text-muted)">暂无告警</div></div>
     </div>
   </div>
@@ -823,7 +839,7 @@ function renderTraceView(session) {
           ${dupHtml}
           ${durStr ? `<span class="trace-duration">${durStr}</span>` : ''}
         </div>
-        <div class="trace-detail">${escHtml(toolSummaryFromTC(tc))}</div>
+        <div class="trace-detail">${escHtml(toolSummaryFromTC(tc))}${tc.response_summary ? ' → <span style="color:var(--green)">' + escHtml(tc.response_summary) + '</span>' : ''}</div>
       </div>`;
     });
 
@@ -929,6 +945,11 @@ function renderMetrics(session) {
   if (!session || !session.metrics) return;
   const m = session.metrics;
 
+  // Session info
+  document.getElementById('mModel').textContent = session.model || '未知';
+  document.getElementById('mUserPrompt').textContent = session.user_prompt || '(未捕获)';
+
+  // Core metrics
   document.getElementById('mToolCalls').textContent = m.tool_calls;
   document.getElementById('mAgents').textContent = m.agents_active;
   document.getElementById('mAgentsSub').textContent = `共 ${m.agents_total} 个, ${m.agents_active} 个活跃`;
@@ -937,6 +958,18 @@ function renderMetrics(session) {
   document.getElementById('mFiles').textContent = m.files_read;
   document.getElementById('mDuration').textContent = fmtDuration(m.duration);
 
+  // Tokens
+  const tokens = session.tokens || {};
+  if (tokens.total > 0) {
+    const tk = tokens.total;
+    document.getElementById('mTokens').textContent = tk > 1000 ? `${(tk/1000).toFixed(1)}k` : tk;
+    document.getElementById('mTokensSub').textContent = `输入: ${tokens.input > 1000 ? (tokens.input/1000).toFixed(1)+'k' : tokens.input} / 输出: ${tokens.output > 1000 ? (tokens.output/1000).toFixed(1)+'k' : tokens.output}`;
+  } else {
+    document.getElementById('mTokens').textContent = '-';
+    document.getElementById('mTokensSub').textContent = '需要 transcript 文件';
+  }
+
+  // Agent bars
   const barsEl = document.getElementById('agentBars');
   if (session.agents && session.agents.length > 0) {
     const maxCalls = Math.max(...session.agents.map(a => a.tool_calls_count || 1));
@@ -953,8 +986,24 @@ function renderMetrics(session) {
     }).join('');
   }
 
+  // Alerts (errors + warnings)
   const alertsEl = document.getElementById('alertsPanel');
   let alerts = '';
+
+  // API/tool errors
+  const errors = session.errors || [];
+  errors.forEach(err => {
+    if (err.type === 'tool_failure') {
+      alerts += `<div class="alert alert-error"><span>&#10007;</span> 工具失败: ${escHtml(err.tool_name)} — ${escHtml(err.error).slice(0,60)}</div>`;
+    } else if (err.type === 'rate_limit') {
+      alerts += `<div class="alert alert-error"><span>&#10007;</span> API 限流! ${escHtml(err.details).slice(0,60)}</div>`;
+    } else if (err.type === 'authentication_failed') {
+      alerts += `<div class="alert alert-error"><span>&#10007;</span> 认证失败</div>`;
+    } else {
+      alerts += `<div class="alert alert-error"><span>&#10007;</span> API 错误: ${escHtml(err.type)}</div>`;
+    }
+  });
+
   if (m.duplicates > 0) alerts += `<div class="alert alert-warn"><span>&#9888;</span> 检测到 ${m.duplicates} 次重复工具调用</div>`;
   if (m.efficiency < 80) alerts += `<div class="alert alert-error"><span>&#10007;</span> 效率低于 80%（当前 ${m.efficiency}%）</div>`;
   if (m.agents_active > 0) alerts += `<div class="alert alert-info"><span>&#10003;</span> ${m.agents_active} 个 Agent 正在工作中</div>`;
@@ -1234,7 +1283,7 @@ function showAgentDetail(agentId) {
           ${dupHtml}
           ${durStr ? `<span class="trace-duration">${durStr}</span>` : ''}
         </div>
-        <div class="trace-detail">${escHtml(toolSummaryFromTC(tc))}</div>
+        <div class="trace-detail">${escHtml(toolSummaryFromTC(tc))}${tc.response_summary ? ' → <span style="color:var(--green)">' + escHtml(tc.response_summary) + '</span>' : ''}</div>
       </div>`;
     });
   }

@@ -32,6 +32,10 @@ def get_or_create_session(session_id: str, cwd: str = "") -> dict:
             "pending_agent_dispatch": None,  # for parent inference
             "skills": [],           # list of {name, invoked_at}
             "tasks": {},            # task_id -> {subject, status, ...}
+            "model": "",            # model name from SessionStart
+            "user_prompt": "",      # user's original request
+            "errors": [],           # API/tool errors
+            "transcript_path": "",  # path to transcript file
         }
     s = sessions[session_id]
     if cwd and not s["cwd"]:
@@ -405,6 +409,75 @@ def compute_analysis(session: dict) -> dict:
     }
 
 
+def _summarize_response(tool_name: str, resp: dict) -> str:
+    """Extract a short summary from tool_response."""
+    if isinstance(resp, str):
+        return resp[:200]
+    if isinstance(resp, dict):
+        # Grep might return match count or file list
+        if tool_name == "Grep":
+            files = resp.get("files_with_matches", resp.get("files", []))
+            count = resp.get("count", resp.get("match_count", len(files) if isinstance(files, list) else 0))
+            return f"{count} 个匹配" if count else str(resp)[:200]
+        if tool_name == "Read":
+            lines = resp.get("lines", resp.get("content", ""))
+            if isinstance(lines, str):
+                lc = lines.count('\n') + 1
+                return f"{lc} 行"
+            return str(resp)[:200]
+        if tool_name == "Bash":
+            output = resp.get("stdout", resp.get("output", ""))
+            exit_code = resp.get("exit_code", resp.get("exitCode", None))
+            prefix = f"exit={exit_code} " if exit_code is not None else ""
+            return f"{prefix}{str(output)[:150]}"
+        if tool_name == "Glob":
+            files = resp.get("files", resp.get("matches", []))
+            return f"{len(files)} 个文件" if isinstance(files, list) else str(resp)[:200]
+    return str(resp)[:200]
+
+
+def estimate_tokens_from_transcript(transcript_path: str) -> dict:
+    """Parse transcript file to estimate token usage per agent."""
+    result = {"total": 0, "by_agent": {}, "input": 0, "output": 0}
+    if not transcript_path or not os.path.exists(transcript_path):
+        return result
+    try:
+        with open(transcript_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                # Look for usage info in the transcript
+                usage = entry.get("usage", {})
+                if usage:
+                    inp = usage.get("input_tokens", 0)
+                    out = usage.get("output_tokens", 0)
+                    result["input"] += inp
+                    result["output"] += out
+                    result["total"] += inp + out
+                # Alternative: estimate from message length
+                if not usage and entry.get("role") == "assistant":
+                    content = entry.get("content", "")
+                    if isinstance(content, str):
+                        # Rough estimate: 1 token ≈ 4 chars for English, 2 chars for Chinese
+                        est = len(content) // 3
+                        result["output"] += est
+                        result["total"] += est
+                    elif isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("text"):
+                                est = len(block["text"]) // 3
+                                result["output"] += est
+                                result["total"] += est
+    except Exception:
+        pass
+    return result
+
+
 def _tool_short_summary(tool_name: str, tool_input: dict) -> str:
     """Short summary of a tool call for task operation log."""
     if tool_name == "Grep":
@@ -447,16 +520,54 @@ def process_event(data: dict) -> dict:
 
     agent_id = data.get("agent_id") or "main"
 
+    # Store transcript path from any event that has it
+    if data.get("transcript_path") and not session["transcript_path"]:
+        session["transcript_path"] = data["transcript_path"]
+
     if event_name == "SessionStart":
         session["started_at"] = now
         session["status"] = "active"
+        if data.get("model"):
+            session["model"] = data["model"]
+        if data.get("source"):
+            session["_source"] = data["source"]  # startup/resume/clear/compact
+
+    elif event_name == "UserPromptSubmit":
+        prompt = data.get("prompt", "")
+        if prompt:
+            session["user_prompt"] = prompt
 
     elif event_name == "SessionEnd":
         session["status"] = "ended"
+        session["_end_reason"] = data.get("reason", "")
         for a in session["agents"].values():
             if a["status"] == "running":
                 a["status"] = "done"
                 a["ended_at"] = now
+
+    elif event_name == "Stop":
+        last_msg = data.get("last_assistant_message", "")
+        session["_last_message"] = last_msg[:2000]
+
+    elif event_name == "StopFailure":
+        err = {
+            "type": data.get("error", "unknown"),
+            "details": data.get("error_details", ""),
+            "message": data.get("last_assistant_message", "")[:500],
+            "at": now,
+        }
+        session["errors"].append(err)
+
+    elif event_name == "PostToolUseFailure":
+        err = {
+            "type": "tool_failure",
+            "tool_name": data.get("tool_name", ""),
+            "error": data.get("error", ""),
+            "is_interrupt": data.get("is_interrupt", False),
+            "agent_id": agent_id,
+            "at": now,
+        }
+        session["errors"].append(err)
 
     elif event_name == "SubagentStart":
         sub_id = data.get("agent_id", f"agent-{now}")
@@ -484,6 +595,8 @@ def process_event(data: dict) -> dict:
             agent = session["agents"][sub_id]
             agent["status"] = "done"
             agent["ended_at"] = now
+            agent["transcript_path"] = data.get("agent_transcript_path", "")
+            agent["last_message"] = (data.get("last_assistant_message", "") or "")[:1000]
 
     elif event_name == "PreToolUse":
         tool_name = data.get("tool_name", "")
@@ -576,6 +689,12 @@ def process_event(data: dict) -> dict:
         if tool_use_id in session["tool_calls"]:
             tc = session["tool_calls"][tool_use_id]
             tc["ended_at"] = now
+            # Capture tool_response summary
+            tool_resp = data.get("tool_response", {})
+            if tool_resp:
+                tc["response_summary"] = _summarize_response(
+                    tc.get("tool_name", ""), tool_resp
+                )
         event["agent_id"] = agent_id
         event["tool_name"] = data.get("tool_name", "")
 
@@ -654,6 +773,7 @@ async def handle_session_detail(request: web.Request) -> web.Response:
                 "ended_at": tc.get("ended_at"),
                 "is_duplicate": tc.get("is_duplicate", False),
                 "duplicate_of": tc.get("duplicate_of"),
+                "response_summary": tc.get("response_summary", ""),
             })
 
         # Context audit for subagents
@@ -701,17 +821,24 @@ async def handle_session_detail(request: web.Request) -> web.Response:
             "operations": t.get("operations", [])[-50:],  # last 50
         })
 
+    # Token estimation
+    token_info = estimate_tokens_from_transcript(s.get("transcript_path", ""))
+
     return web.json_response({
         "session_id": s["session_id"],
         "cwd": s["cwd"],
         "status": s["status"],
         "started_at": s["started_at"],
+        "model": s.get("model", ""),
+        "user_prompt": s.get("user_prompt", ""),
         "agents": agents_list,
         "events": events_list,
         "metrics": compute_metrics(s),
         "skills": s.get("skills", []),
         "tasks": tasks_list,
         "analysis": compute_analysis(s),
+        "errors": s.get("errors", []),
+        "tokens": token_info,
     })
 
 

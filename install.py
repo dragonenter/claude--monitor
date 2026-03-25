@@ -24,8 +24,13 @@ HOOK_EVENTS = [
     "SessionEnd",
     "PreToolUse",
     "PostToolUse",
+    "PostToolUseFailure",
     "SubagentStart",
     "SubagentStop",
+    "Stop",
+    "StopFailure",
+    "UserPromptSubmit",
+    "TaskCompleted",
 ]
 
 HOOK_MARKER = "claude-code-monitor"
