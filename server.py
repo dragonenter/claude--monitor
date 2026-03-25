@@ -208,6 +208,203 @@ def compute_metrics(session: dict) -> dict:
     }
 
 
+def compute_analysis(session: dict) -> dict:
+    """Generate analysis report with issues, bottlenecks, and recommendations."""
+    pre_events = [e for e in session["events"] if e.get("hook_event_name") == "PreToolUse"]
+    post_events = {e.get("tool_use_id"): e for e in session["events"] if e.get("hook_event_name") == "PostToolUse"}
+    agents = session["agents"]
+    now = time.time()
+
+    issues = []       # {severity: "error"|"warn"|"info", title, detail, impact}
+    bottlenecks = []  # {agent_id, agent_type, duration, tool_calls, reason}
+    recommendations = []  # {priority: 1-3, title, detail}
+
+    # --- Duplicate analysis ---
+    dup_events = [e for e in pre_events if e.get("_is_duplicate")]
+    dup_by_agent = defaultdict(list)
+    for e in dup_events:
+        dup_by_agent[e.get("agent_id", "main")].append(e)
+
+    for aid, dups in dup_by_agent.items():
+        agent = agents.get(aid, {})
+        atype = agent.get("agent_type", aid)
+        dup_details = []
+        for d in dups:
+            tn = d.get("tool_name", "")
+            if tn == "Grep":
+                dup_details.append(f'搜索 "{d.get("tool_input", {}).get("pattern", "")[:30]}"')
+            elif tn == "Read":
+                fp = d.get("tool_input", {}).get("file_path", "")
+                dup_details.append(f'读取 {fp.split("/")[-1] if "/" in fp else fp}')
+            else:
+                dup_details.append(f'{tn}')
+
+        issues.append({
+            "severity": "error" if len(dups) >= 3 else "warn",
+            "title": f"Agent [{atype}] 执行了 {len(dups)} 次重复操作",
+            "detail": "重复: " + ", ".join(dup_details),
+            "impact": f"浪费了约 {len(dups)} 次工具调用",
+        })
+
+    # --- Context loss analysis ---
+    for aid, agent in agents.items():
+        if not agent.get("parent_id"):
+            continue
+        audit = compute_context_audit(session, aid)
+        if audit["score"] < 70:
+            atype = agent.get("agent_type", aid)
+            missing_items = [m["value"].split("/")[-1] if "/" in m["value"] else m["value"] for m in audit["missing"]]
+            issues.append({
+                "severity": "error",
+                "title": f"Agent [{atype}] 上下文完整度仅 {audit['score']}%",
+                "detail": f"缺失: {', '.join(missing_items[:5])}",
+                "impact": "导致子 Agent 重新搜索/读取已知信息",
+            })
+        elif audit["score"] < 90:
+            atype = agent.get("agent_type", aid)
+            issues.append({
+                "severity": "warn",
+                "title": f"Agent [{atype}] 上下文完整度 {audit['score']}%",
+                "detail": f"有 {len(audit['missing'])} 项信息未传递",
+                "impact": "可能导致部分重复工作",
+            })
+
+    # --- Bottleneck analysis ---
+    for aid, agent in agents.items():
+        started = agent.get("started_at", now)
+        ended = agent.get("ended_at") or now
+        duration = ended - started
+        tc_count = len(agent.get("tool_calls", []))
+        atype = agent.get("agent_type", aid)
+
+        reasons = []
+        if duration > 60:
+            reasons.append(f"耗时 {int(duration)}s")
+        if tc_count > 15:
+            reasons.append(f"{tc_count} 次工具调用")
+
+        # Check if agent's work was wasted (e.g., all writes later overwritten)
+        agent_writes = []
+        for tu_id in agent.get("tool_calls", []):
+            tc = session["tool_calls"].get(tu_id, {})
+            if tc.get("tool_name") in ("Write", "Edit"):
+                agent_writes.append(tc.get("tool_input", {}).get("file_path", ""))
+
+        # Check if same file was written by another agent later
+        wasted_writes = []
+        for fp in agent_writes:
+            for other_aid, other_agent in agents.items():
+                if other_aid == aid:
+                    continue
+                for other_tu_id in other_agent.get("tool_calls", []):
+                    other_tc = session["tool_calls"].get(other_tu_id, {})
+                    if other_tc.get("tool_name") in ("Write", "Edit"):
+                        other_fp = other_tc.get("tool_input", {}).get("file_path", "")
+                        if other_fp == fp and (other_tc.get("started_at", 0) > started):
+                            wasted_writes.append(fp)
+
+        if wasted_writes:
+            reasons.append(f"{len(wasted_writes)} 个文件后来被其他 Agent 覆盖")
+            issues.append({
+                "severity": "error",
+                "title": f"Agent [{atype}] 的写入被覆盖",
+                "detail": f"文件: {', '.join(set(f.split('/')[-1] for f in wasted_writes))}",
+                "impact": "该 Agent 的编码工作完全浪费",
+            })
+
+        if reasons:
+            bottlenecks.append({
+                "agent_id": aid,
+                "agent_type": atype,
+                "duration": round(duration, 1),
+                "tool_calls": tc_count,
+                "reasons": reasons,
+            })
+
+    bottlenecks.sort(key=lambda x: x["duration"], reverse=True)
+
+    # --- Task analysis ---
+    tasks = session.get("tasks", {})
+    completed_tasks = [t for t in tasks.values() if t["status"] == "completed"]
+    in_progress_tasks = [t for t in tasks.values() if t["status"] == "in_progress"]
+    if in_progress_tasks:
+        for t in in_progress_tasks:
+            elapsed = now - t.get("created_at", now)
+            if elapsed > 120:
+                issues.append({
+                    "severity": "warn",
+                    "title": f"任务 [{t['subject'][:20]}] 执行超过 {int(elapsed)}s",
+                    "detail": f"当前状态: 执行中, 已产生 {len(t.get('operations', []))} 个操作",
+                    "impact": "可能存在卡住或效率问题",
+                })
+
+    # --- Recommendations ---
+    total_dups = len(dup_events)
+    total_calls = len(pre_events)
+
+    if total_dups > 0:
+        recommendations.append({
+            "priority": 1,
+            "title": "在 Subagent Prompt 中包含已知信息",
+            "detail": f"当前有 {total_dups}/{total_calls} 次调用是重复的。在派发 Subagent 时，将已读取的文件内容和搜索结果作为上下文传入 prompt，可避免子 Agent 重复探索。",
+        })
+
+    context_scores = []
+    for aid, agent in agents.items():
+        if agent.get("parent_id"):
+            audit = compute_context_audit(session, aid)
+            context_scores.append(audit["score"])
+    if context_scores and min(context_scores) < 80:
+        recommendations.append({
+            "priority": 1,
+            "title": "改善上下文传递策略",
+            "detail": f"最低上下文完整度仅 {min(context_scores)}%。建议在 Agent prompt 中明确列出: 1) 已确认的技术决策 2) 已读取的关键文件摘要 3) 已搜索过的模式（避免重复搜索）",
+        })
+
+    if any(b.get("reasons") and "覆盖" in str(b.get("reasons")) for b in bottlenecks):
+        recommendations.append({
+            "priority": 2,
+            "title": "避免多个 Agent 写同一文件",
+            "detail": "检测到不同 Agent 对同一文件的写入被覆盖。建议在派发实现类 Agent 前，确保 Plan 的决策已传递，避免返工。",
+        })
+
+    if len(agents) > 3:
+        recommendations.append({
+            "priority": 3,
+            "title": "控制 Subagent 数量",
+            "detail": f"当前使用了 {len(agents)} 个 Agent。过多的 Agent 会增加上下文传递负担，考虑合并相关任务到同一个 Agent。",
+        })
+
+    if total_calls > 0 and total_dups == 0 and (not context_scores or min(context_scores) >= 90):
+        recommendations.append({
+            "priority": 3,
+            "title": "当前工作流表现良好",
+            "detail": "未检测到重复调用或上下文缺失问题，Agent 协作效率正常。",
+        })
+
+    # --- Health score ---
+    dup_penalty = min(total_dups * 5, 30)
+    ctx_penalty = sum(max(0, 80 - s) for s in context_scores) if context_scores else 0
+    ctx_penalty = min(ctx_penalty, 30)
+    error_count = sum(1 for i in issues if i["severity"] == "error")
+    error_penalty = min(error_count * 10, 20)
+    health = max(0, 100 - dup_penalty - ctx_penalty - error_penalty)
+
+    return {
+        "health_score": health,
+        "issues": issues,
+        "bottlenecks": bottlenecks[:5],
+        "recommendations": sorted(recommendations, key=lambda r: r["priority"]),
+        "summary": {
+            "total_calls": total_calls,
+            "duplicates": total_dups,
+            "agents": len(agents),
+            "error_count": error_count,
+            "warn_count": sum(1 for i in issues if i["severity"] == "warn"),
+        },
+    }
+
+
 def _tool_short_summary(tool_name: str, tool_input: dict) -> str:
     """Short summary of a tool call for task operation log."""
     if tool_name == "Grep":
@@ -514,6 +711,7 @@ async def handle_session_detail(request: web.Request) -> web.Response:
         "metrics": compute_metrics(s),
         "skills": s.get("skills", []),
         "tasks": tasks_list,
+        "analysis": compute_analysis(s),
     })
 
 

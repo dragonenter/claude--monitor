@@ -364,6 +364,80 @@ body {
   background: linear-gradient(90deg, var(--green), var(--blue));
   transition: width .4s ease;
 }
+
+/* ---- Analysis Report ---- */
+.health-ring {
+  width: 120px; height: 120px; position: relative; display: inline-block;
+}
+.health-ring svg { width: 120px; height: 120px; transform: rotate(-90deg); }
+.health-ring circle { fill: none; stroke-width: 8; cx: 60; cy: 60; r: 50; }
+.health-ring .ring-bg { stroke: var(--bg-tertiary); }
+.health-ring .ring-fg { stroke-linecap: round; transition: stroke-dasharray .8s; }
+.health-ring-text {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  text-align: center;
+}
+.health-score { font-size: 32px; font-weight: 800; line-height: 1; }
+.health-label { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+.issue-card {
+  padding: 12px 14px; border-radius: 8px; margin-bottom: 8px;
+  display: flex; gap: 12px; align-items: flex-start;
+  border: 1px solid; transition: transform .1s;
+}
+.issue-card:hover { transform: translateX(2px); }
+.issue-error { background: #3d0e0e44; border-color: #f8514933; }
+.issue-warn { background: #3d1e0044; border-color: #f0883e33; }
+.issue-info { background: #0d281844; border-color: #23863633; }
+.issue-icon {
+  width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+}
+.issue-icon-error { background: #f8514933; color: var(--red); }
+.issue-icon-warn { background: #f0883e33; color: var(--orange); }
+.issue-icon-info { background: #23863633; color: var(--green); }
+.issue-title { font-size: 13px; font-weight: 600; }
+.issue-detail { font-size: 11px; color: var(--text-secondary); margin-top: 2px; line-height: 1.4; }
+.issue-impact { font-size: 11px; color: var(--text-muted); margin-top: 3px; font-style: italic; }
+
+.bottleneck-bar {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+.bottleneck-name { width: 80px; font-size: 12px; font-weight: 600; }
+.bottleneck-track { flex: 1; height: 20px; background: var(--bg-primary); border-radius: 5px; overflow: hidden; position: relative; }
+.bottleneck-fill {
+  height: 100%; border-radius: 5px; display: flex; align-items: center;
+  padding-left: 8px; font-size: 10px; color: white; font-weight: 600;
+  transition: width .5s;
+}
+.bottleneck-reasons { font-size: 10px; color: var(--text-muted); width: 160px; text-align: right; }
+
+.rec-card {
+  padding: 14px; border-radius: 10px; margin-bottom: 8px;
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  transition: all .15s;
+}
+.rec-card:hover { border-color: var(--blue); }
+.rec-priority {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 6px; font-size: 11px; font-weight: 700;
+  margin-right: 8px; flex-shrink: 0;
+}
+.rec-p1 { background: #f8514933; color: var(--red); }
+.rec-p2 { background: #f0883e33; color: var(--orange); }
+.rec-p3 { background: #23863633; color: var(--green); }
+.rec-title { font-size: 13px; font-weight: 600; display: inline; }
+.rec-detail { font-size: 12px; color: var(--text-secondary); margin-top: 6px; line-height: 1.6; }
+
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.summary-item {
+  padding: 12px; background: var(--bg-primary); border-radius: 8px;
+  text-align: center; box-shadow: var(--card-shadow);
+}
+.summary-num { font-size: 22px; font-weight: 700; }
+.summary-label { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -398,6 +472,7 @@ body {
       <button class="center-tab" onclick="switchCenterTab(this,'view-trace')">调用链追踪</button>
       <button class="center-tab" onclick="switchCenterTab(this,'view-audit')">上下文审计</button>
       <button class="center-tab" onclick="switchCenterTab(this,'view-plan')">任务计划</button>
+      <button class="center-tab" onclick="switchCenterTab(this,'view-analysis')">分析报告</button>
     </div>
     <div class="center-view active" id="view-feed">
       <div id="eventFeed">
@@ -428,6 +503,14 @@ body {
         <div class="empty-state">
           <div class="empty-state-icon">&#9744;</div>
           <div class="empty-state-text">任务计划<br>展示 Skills 和任务执行进度</div>
+        </div>
+      </div>
+    </div>
+    <div class="center-view" id="view-analysis">
+      <div id="analysisView">
+        <div class="empty-state">
+          <div class="empty-state-icon">&#9881;</div>
+          <div class="empty-state-text">分析报告<br>自动识别问题并给出优化建议</div>
         </div>
       </div>
     </div>
@@ -967,12 +1050,130 @@ function renderPlanView(session) {
   el.innerHTML = html;
 }
 
+// =========================================================================
+// Render: Analysis Report (分析报告)
+// =========================================================================
+function renderAnalysisView(session) {
+  const el = document.getElementById('analysisView');
+  if (!session || !session.analysis) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">&#9881;</div><div class="empty-state-text">暂无分析数据</div></div>';
+    return;
+  }
+
+  const a = session.analysis;
+  const scoreColor = a.health_score >= 80 ? 'var(--green)' : a.health_score >= 50 ? 'var(--orange)' : 'var(--red)';
+  const circumference = 2 * Math.PI * 50;
+  const dashLen = (a.health_score / 100) * circumference;
+  const scoreLabel = a.health_score >= 80 ? '良好' : a.health_score >= 50 ? '需改善' : '低效';
+
+  let html = '';
+
+  // Health score + summary
+  html += `<div class="section-card" style="display:flex;align-items:center;gap:24px">
+    <div class="health-ring">
+      <svg><circle class="ring-bg" r="50" cx="60" cy="60"/><circle class="ring-fg" r="50" cx="60" cy="60" stroke="${scoreColor}" stroke-dasharray="${dashLen} ${circumference}"/></svg>
+      <div class="health-ring-text">
+        <div class="health-score" style="color:${scoreColor}">${a.health_score}</div>
+        <div class="health-label">${scoreLabel}</div>
+      </div>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:16px;font-weight:700;margin-bottom:10px">会话健康度评分</div>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-num" style="color:var(--blue)">${a.summary.total_calls}</div>
+          <div class="summary-label">总调用</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-num" style="color:var(--orange)">${a.summary.duplicates}</div>
+          <div class="summary-label">重复调用</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-num" style="color:var(--red)">${a.summary.error_count}</div>
+          <div class="summary-label">严重问题</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-num" style="color:var(--yellow)">${a.summary.warn_count}</div>
+          <div class="summary-label">警告</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+  // Issues
+  if (a.issues.length > 0) {
+    html += `<div class="section-card">
+      <div class="section-card-title">发现的问题 (${a.issues.length})</div>`;
+    a.issues.forEach(issue => {
+      const sevCls = `issue-${issue.severity}`;
+      const iconCls = `issue-icon-${issue.severity}`;
+      const icon = issue.severity === 'error' ? '!' : issue.severity === 'warn' ? '?' : 'i';
+      html += `<div class="issue-card ${sevCls}">
+        <div class="issue-icon ${iconCls}">${icon}</div>
+        <div>
+          <div class="issue-title">${escHtml(issue.title)}</div>
+          <div class="issue-detail">${escHtml(issue.detail)}</div>
+          <div class="issue-impact">${escHtml(issue.impact)}</div>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Bottlenecks
+  if (a.bottlenecks.length > 0) {
+    html += `<div class="section-card">
+      <div class="section-card-title">瓶颈分析</div>`;
+    const maxDur = Math.max(...a.bottlenecks.map(b => b.duration));
+    a.bottlenecks.forEach(b => {
+      const pct = Math.round((b.duration / maxDur) * 100);
+      const colors = {Main:'#1f6feb',Explore:'#238636',Plan:'#8957e5',general:'#f0883e'};
+      const bg = colors[b.agent_type] || '#6e7681';
+      html += `<div class="bottleneck-bar">
+        <span class="bottleneck-name">${b.agent_type || shortId(b.agent_id)}</span>
+        <div class="bottleneck-track">
+          <div class="bottleneck-fill" style="width:${pct}%;background:${bg}">${b.duration}s · ${b.tool_calls} 次调用</div>
+        </div>
+        <span class="bottleneck-reasons">${b.reasons.join(', ')}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Recommendations
+  if (a.recommendations.length > 0) {
+    html += `<div class="section-card">
+      <div class="section-card-title">优化建议</div>`;
+    a.recommendations.forEach(rec => {
+      const pCls = `rec-p${rec.priority}`;
+      html += `<div class="rec-card">
+        <div style="display:flex;align-items:center">
+          <span class="rec-priority ${pCls}">P${rec.priority}</span>
+          <div class="rec-title">${escHtml(rec.title)}</div>
+        </div>
+        <div class="rec-detail">${escHtml(rec.detail)}</div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  if (a.issues.length === 0 && a.bottlenecks.length === 0) {
+    html += `<div class="section-card" style="text-align:center;padding:30px">
+      <div style="font-size:32px;opacity:.3;margin-bottom:8px">&#10003;</div>
+      <div style="font-size:14px;color:var(--green);font-weight:600">当前会话运行良好，未检测到明显问题</div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
 function renderAll(session) {
   renderAgentTree(session);
   renderEventFeed(session);
   renderTraceView(session);
   renderAuditView(session);
   renderPlanView(session);
+  renderAnalysisView(session);
   renderMetrics(session);
 
   const badge = document.getElementById('statusBadge');
