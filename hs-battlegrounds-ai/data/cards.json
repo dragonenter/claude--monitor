@@ -1,0 +1,182 @@
+[
+  {
+    "card_id": "BG_Minion_001",
+    "name": "Alleycat",
+    "attack": 1,
+    "health": 1,
+    "tavern_tier": 1,
+    "minion_type": "BEAST",
+    "keywords": [],
+    "text": "Battlecry: Summon a 1/1 Cat."
+  },
+  {
+    "card_id": "BG_Minion_002",
+    "name": "Murloc Tidehunter",
+    "attack": 2,
+    "health": 1,
+    "tavern_tier": 1,
+    "minion_type": "MURLOC",
+    "keywords": [],
+    "text": "Battlecry: Summon a 1/1 Murloc Scout."
+  },
+  {
+    "card_id": "BG_Minion_003",
+    "name": "Micro Machine",
+    "attack": 1,
+    "health": 2,
+    "tavern_tier": 1,
+    "minion_type": "MECH",
+    "keywords": [],
+    "text": "At the start of each turn, gain +1 Attack."
+  },
+  {
+    "card_id": "BG_Minion_004",
+    "name": "Wrath Weaver",
+    "attack": 1,
+    "health": 3,
+    "tavern_tier": 1,
+    "minion_type": "NONE",
+    "keywords": [],
+    "text": "After you play a Demon, deal 1 damage to your hero and gain +2/+2."
+  },
+  {
+    "card_id": "BG_Minion_005",
+    "name": "Red Whelp",
+    "attack": 1,
+    "health": 2,
+    "tavern_tier": 1,
+    "minion_type": "DRAGON",
+    "keywords": [],
+    "text": "Start of Combat: Deal 1 damage per friendly Dragon to one random enemy minion."
+  },
+  {
+    "card_id": "BG_Minion_006",
+    "name": "Sellemental",
+    "attack": 2,
+    "health": 2,
+    "tavern_tier": 1,
+    "minion_type": "ELEMENTAL",
+    "keywords": [],
+    "text": "When you sell this, add a 1/1 Water Droplet to your hand."
+  },
+  {
+    "card_id": "BG_Minion_007",
+    "name": "Deck Swabbie",
+    "attack": 2,
+    "health": 2,
+    "tavern_tier": 1,
+    "minion_type": "PIRATE",
+    "keywords": [],
+    "text": "Battlecry: Reduce the cost of upgrading Bob's Tavern by (1)."
+  },
+  {
+    "card_id": "BG_Minion_008",
+    "name": "Scavenging Hyena",
+    "attack": 2,
+    "health": 2,
+    "tavern_tier": 1,
+    "minion_type": "BEAST",
+    "keywords": [],
+    "text": "Whenever a friendly Beast dies, gain +2/+1."
+  },
+  {
+    "card_id": "BG_Minion_009",
+    "name": "Sun-Bacon Relaxer",
+    "attack": 1,
+    "health": 2,
+    "tavern_tier": 1,
+    "minion_type": "QUILBOAR",
+    "keywords": [],
+    "text": "After this attacks, give your minions +1 Health."
+  },
+  {
+    "card_id": "BG_Minion_010",
+    "name": "Harvest Golem",
+    "attack": 2,
+    "health": 3,
+    "tavern_tier": 2,
+    "minion_type": "MECH",
+    "keywords": ["DEATHRATTLE"],
+    "text": "Deathrattle: Summon a 2/1 Damaged Golem."
+  },
+  {
+    "card_id": "BG_Minion_011",
+    "name": "Kaboom Bot",
+    "attack": 2,
+    "health": 2,
+    "tavern_tier": 2,
+    "minion_type": "MECH",
+    "keywords": ["DEATHRATTLE"],
+    "text": "Deathrattle: Deal 4 damage to a random enemy minion."
+  },
+  {
+    "card_id": "BG_Minion_012",
+    "name": "Old Murk-Eye",
+    "attack": 2,
+    "health": 4,
+    "tavern_tier": 2,
+    "minion_type": "MURLOC",
+    "keywords": [],
+    "text": "Charge. Has +1 Attack for each other Murloc on the battlefield."
+  },
+  {
+    "card_id": "BG_Minion_013",
+    "name": "Spawn of N'Zoth",
+    "attack": 2,
+    "health": 2,
+    "tavern_tier": 2,
+    "minion_type": "NONE",
+    "keywords": ["DEATHRATTLE"],
+    "text": "Deathrattle: Give your minions +1/+1."
+  },
+  {
+    "card_id": "BG_Minion_014",
+    "name": "Twilight Emissary",
+    "attack": 4,
+    "health": 4,
+    "tavern_tier": 2,
+    "minion_type": "DRAGON",
+    "keywords": ["TAUNT"],
+    "text": "Taunt. Battlecry: Give a friendly Dragon +2/+2."
+  },
+  {
+    "card_id": "BG_Minion_015",
+    "name": "Bronze Warden",
+    "attack": 2,
+    "health": 1,
+    "tavern_tier": 3,
+    "minion_type": "DRAGON",
+    "keywords": ["DIVINE_SHIELD", "REBORN"],
+    "text": "Divine Shield, Reborn."
+  },
+  {
+    "card_id": "BG_Minion_016",
+    "name": "Soul Juggler",
+    "attack": 3,
+    "health": 3,
+    "tavern_tier": 3,
+    "minion_type": "NONE",
+    "keywords": [],
+    "text": "After a friendly Demon dies, deal 3 damage to a random enemy minion."
+  },
+  {
+    "card_id": "BG_Minion_017",
+    "name": "Deflect-o-Bot",
+    "attack": 3,
+    "health": 2,
+    "tavern_tier": 3,
+    "minion_type": "MECH",
+    "keywords": ["DIVINE_SHIELD"],
+    "text": "Divine Shield. Whenever you summon a Mech, gain Divine Shield."
+  },
+  {
+    "card_id": "BG_Minion_018",
+    "name": "Crackling Cyclone",
+    "attack": 4,
+    "health": 1,
+    "tavern_tier": 3,
+    "minion_type": "ELEMENTAL",
+    "keywords": ["WINDFURY", "DIVINE_SHIELD"],
+    "text": "Windfury, Divine Shield."
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "type_id": "BEAST",
+    "name": "Beast",
+    "name_zh": "野兽",
+    "available_in_pool": true,
+    "icon": "beast"
+  },
+  {
+    "type_id": "DEMON",
+    "name": "Demon",
+    "name_zh": "恶魔",
+    "available_in_pool": true,
+    "icon": "demon"
+  },
+  {
+    "type_id": "DRAGON",
+    "name": "Dragon",
+    "name_zh": "龙",
+    "available_in_pool": true,
+    "icon": "dragon"
+  },
+  {
+    "type_id": "ELEMENTAL",
+    "name": "Elemental",
+    "name_zh": "元素",
+    "available_in_pool": true,
+    "icon": "elemental"
+  },
+  {
+    "type_id": "MECH",
+    "name": "Mech",
+    "name_zh": "机械",
+    "available_in_pool": true,
+    "icon": "mech"
+  },
+  {
+    "type_id": "MURLOC",
+    "name": "Murloc",
+    "name_zh": "鱼人",
+    "available_in_pool": true,
+    "icon": "murloc"
+  },
+  {
+    "type_id": "NAGA",
+    "name": "Naga",
+    "name_zh": "纳迦",
+    "available_in_pool": true,
+    "icon": "naga"
+  },
+  {
+    "type_id": "PIRATE",
+    "name": "Pirate",
+    "name_zh": "海盗",
+    "available_in_pool": true,
+    "icon": "pirate"
+  },
+  {
+    "type_id": "QUILBOAR",
+    "name": "Quilboar",
+    "name_zh": "野猪人",
+    "available_in_pool": true,
+    "icon": "quilboar"
+  },
+  {
+    "type_id": "UNDEAD",
+    "name": "Undead",
+    "name_zh": "亡灵",
+    "available_in_pool": true,
+    "icon": "undead"
+  },
+  {
+    "type_id": "ALL",
+    "name": "All",
+    "name_zh": "全部",
+    "available_in_pool": false,
+    "icon": "all"
+  },
+  {
+    "type_id": "NONE",
+    "name": "None",
+    "name_zh": "无",
+    "available_in_pool": false,
+    "icon": "neutral"
+  }
+]

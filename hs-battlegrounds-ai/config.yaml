@@ -1,0 +1,36 @@
+# Hearthstone Battlegrounds AI — Default Configuration
+
+mouse:
+  speed_factor: 1.0
+  bezier_deviation: 15.0
+  click_delay_min: 0.05
+  click_delay_max: 0.15
+
+timing:
+  action_delay_min: 0.2
+  action_delay_max: 0.6
+  think_delay_min: 0.3
+  think_delay_max: 1.0
+
+time:
+  turn_duration: 75.0
+  safety_margin: 5.0
+  first_turn_duration: 45.0
+
+hotkey:
+  start_stop: "f9"
+  pause_resume: "f10"
+  manual_takeover: "f11"
+  emergency_stop: "f12"
+
+ai:
+  aggression: 0.5
+  upgrade_bias: 0.5
+  refresh_limit: 3
+
+log:
+  log_path: ""
+  log_level: "INFO"
+  log_file: "hs_bg_ai.log"
+
+game_window_title: "炉石传说"

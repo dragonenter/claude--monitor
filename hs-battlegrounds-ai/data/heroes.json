@@ -1,0 +1,112 @@
+[
+  {
+    "hero_id": "TB_BaconShop_HERO_01",
+    "name": "A. F. Kay",
+    "tier_rating": 3,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_01",
+      "name": "Procrastinate",
+      "cost": 0,
+      "is_passive": true
+    }
+  },
+  {
+    "hero_id": "TB_BaconShop_HERO_02",
+    "name": "The Lich King",
+    "tier_rating": 3,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_02",
+      "name": "Reborn Rites",
+      "cost": 1,
+      "is_passive": false
+    }
+  },
+  {
+    "hero_id": "TB_BaconShop_HERO_03",
+    "name": "Patches the Pirate",
+    "tier_rating": 2,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_03",
+      "name": "Fire the Cannons!",
+      "cost": 1,
+      "is_passive": false
+    }
+  },
+  {
+    "hero_id": "TB_BaconShop_HERO_04",
+    "name": "Yogg-Saron",
+    "tier_rating": 3,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_04",
+      "name": "Puzzle Box",
+      "cost": 2,
+      "is_passive": false
+    }
+  },
+  {
+    "hero_id": "TB_BaconShop_HERO_05",
+    "name": "Deathwing",
+    "tier_rating": 4,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_05",
+      "name": "ALL Will Burn!",
+      "cost": 0,
+      "is_passive": true
+    }
+  },
+  {
+    "hero_id": "TB_BaconShop_HERO_06",
+    "name": "Nefarian",
+    "tier_rating": 2,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_06",
+      "name": "Nefarious Fire",
+      "cost": 1,
+      "is_passive": false
+    }
+  },
+  {
+    "hero_id": "TB_BaconShop_HERO_07",
+    "name": "Ragnaros the Firelord",
+    "tier_rating": 4,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_07",
+      "name": "DIE, INSECTS!",
+      "cost": 0,
+      "is_passive": true
+    }
+  },
+  {
+    "hero_id": "TB_BaconShop_HERO_08",
+    "name": "The Rat King",
+    "tier_rating": 3,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_08",
+      "name": "King of Beasts",
+      "cost": 0,
+      "is_passive": true
+    }
+  },
+  {
+    "hero_id": "TB_BaconShop_HERO_09",
+    "name": "Shudderwock",
+    "tier_rating": 2,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_09",
+      "name": "Snicker-snack",
+      "cost": 1,
+      "is_passive": false
+    }
+  },
+  {
+    "hero_id": "TB_BaconShop_HERO_10",
+    "name": "Sindragosa",
+    "tier_rating": 3,
+    "hero_power": {
+      "power_id": "TB_BaconShop_HP_10",
+      "name": "Stay Frosty",
+      "cost": 0,
+      "is_passive": true
+    }
+  }
+]
