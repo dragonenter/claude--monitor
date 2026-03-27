@@ -11,6 +11,12 @@ except ImportError:
 import yaml
 from pydantic import BaseModel, Field
 
+from hs_bg_ai.platform_utils import (
+    current_platform,
+    default_log_path,
+    default_window_title,
+)
+
 
 class MouseConfig(BaseModel):
     speed_factor: float = 1.0
@@ -58,7 +64,17 @@ class AppConfig(BaseModel):
     hotkey: HotkeyConfig = Field(default_factory=HotkeyConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
     log: LogConfig = Field(default_factory=LogConfig)
-    game_window_title: str = "炉石传说"
+    game_window_title: str = ""
+    platform: str = ""
+
+    def model_post_init(self, __context: object) -> None:
+        """Auto-detect platform-specific defaults when not explicitly configured."""
+        if not self.platform:
+            self.platform = current_platform()
+        if not self.game_window_title:
+            self.game_window_title = default_window_title(self.platform)  # type: ignore[arg-type]
+        if not self.log.log_path:
+            self.log.log_path = default_log_path(self.platform)  # type: ignore[arg-type]
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> Self:

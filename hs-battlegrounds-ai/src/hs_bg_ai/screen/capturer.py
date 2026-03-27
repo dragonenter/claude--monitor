@@ -12,6 +12,12 @@ try:
 except ImportError:
     _MSS_AVAILABLE = False
 
+from hs_bg_ai.platform_utils import (
+    default_window_title,
+    find_window_by_title,
+    get_window_bounds,
+)
+
 from .regions import ScreenRegion
 
 
@@ -22,8 +28,8 @@ class ScreenCapturer:
     no display is present.
     """
 
-    def __init__(self, window_title: str = "炉石传说") -> None:
-        self._window_title = window_title
+    def __init__(self, window_title: str | None = None) -> None:
+        self._window_title = window_title or default_window_title()
         self._sct: Any = None
 
     # ------------------------------------------------------------------
@@ -48,19 +54,14 @@ class ScreenCapturer:
     def find_game_window(self) -> bool:
         """Attempt to locate the game window.
 
-        Returns ``True`` if found, ``False`` otherwise.  On non-Windows
-        platforms this is a best-effort stub that always returns ``False``
-        (actual window detection requires platform-specific APIs).
+        Returns ``True`` if found, ``False`` otherwise.  Uses platform-specific
+        detection (win32gui on Windows, osascript on macOS, xdotool on Linux).
         """
-        try:
-            import ctypes  # noqa: F401 — Windows-only
+        return find_window_by_title(self._window_title)
 
-            import win32gui  # type: ignore
-
-            hwnd = win32gui.FindWindow(None, self._window_title)
-            return hwnd != 0
-        except ImportError:
-            return False
+    def get_game_window_bounds(self) -> dict[str, int] | None:
+        """Return the game window bounds as ``{left, top, width, height}``, or ``None``."""
+        return get_window_bounds(self._window_title)
 
     def capture(self) -> Any | None:
         """Capture the full primary monitor.

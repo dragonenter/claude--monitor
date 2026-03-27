@@ -2,36 +2,50 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from hs_bg_ai.config import HotkeyConfig
 
-try:
-    import keyboard  # type: ignore
+logger = logging.getLogger(__name__)
 
-    _KEYBOARD_AVAILABLE = True
+try:
+    from pynput.keyboard import GlobalHotKeys, Key, KeyCode  # type: ignore
+
+    _PYNPUT_AVAILABLE = True
 except ImportError:
-    _KEYBOARD_AVAILABLE = False
+    _PYNPUT_AVAILABLE = False
+
+# Mapping from simple key names (e.g. "f9") to pynput format (e.g. "<f9>").
+_KEY_MAP: dict[str, str] = {}
+for _i in range(1, 13):
+    _KEY_MAP[f"f{_i}"] = f"<f{_i}>"
+
+
+def _to_pynput_key(key: str) -> str:
+    """Convert a simple key name to a pynput hotkey string."""
+    return _KEY_MAP.get(key.lower(), key.lower())
 
 
 class HotkeyManager:
     """Registers global hotkeys and dispatches them to callbacks.
 
-    Uses the ``keyboard`` library when available (Windows/Linux with root).
-    On unsupported platforms the class is a harmless no-op stub.
+    Uses ``pynput.keyboard.GlobalHotKeys`` for cross-platform support
+    (Windows, macOS, Linux). Falls back to a harmless no-op stub when
+    pynput is unavailable.
 
     Default hotkeys (from :class:`~hs_bg_ai.config.HotkeyConfig`):
-    - F9  — start/stop bot
-    - F10 — pause/resume
-    - F11 — manual takeover
-    - F12 — emergency stop
+    - F9  -- start/stop bot
+    - F10 -- pause/resume
+    - F11 -- manual takeover
+    - F12 -- emergency stop
     """
 
     def __init__(self, config: HotkeyConfig | None = None) -> None:
         self._config = config or HotkeyConfig()
         self._callbacks: dict[str, Callable[[], None]] = {}
         self._listening = False
-        self._hook_ids: list[Any] = []  # type: ignore[name-defined]
+        self._listener: Any = None
 
     # ------------------------------------------------------------------
     # Registration
@@ -40,7 +54,7 @@ class HotkeyManager:
     def register(self, key: str, callback: Callable[[], None]) -> None:
         """Associate *callback* with *key* (e.g. ``"f9"``).
 
-        Registration is idempotent — registering the same key again replaces
+        Registration is idempotent -- registering the same key again replaces
         the previous callback.
         """
         self._callbacks[key.lower()] = callback
@@ -71,23 +85,28 @@ class HotkeyManager:
         if self._listening:
             return
         self._listening = True
-        if _KEYBOARD_AVAILABLE:
-            for key, cb in self._callbacks.items():
-                hook = keyboard.add_hotkey(key, cb)
-                self._hook_ids.append(hook)
+        if _PYNPUT_AVAILABLE and self._callbacks:
+            hotkeys = {
+                _to_pynput_key(key): cb for key, cb in self._callbacks.items()
+            }
+            try:
+                self._listener = GlobalHotKeys(hotkeys)
+                self._listener.start()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Failed to start hotkey listener: %s", exc)
+                self._listener = None
 
     def stop(self) -> None:
         """Stop intercepting hotkeys and clean up."""
         if not self._listening:
             return
         self._listening = False
-        if _KEYBOARD_AVAILABLE:
-            for hook in self._hook_ids:
-                try:
-                    keyboard.remove_hotkey(hook)
-                except Exception:  # noqa: BLE001
-                    pass
-            self._hook_ids.clear()
+        if self._listener is not None:
+            try:
+                self._listener.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            self._listener = None
 
     @property
     def is_listening(self) -> bool:

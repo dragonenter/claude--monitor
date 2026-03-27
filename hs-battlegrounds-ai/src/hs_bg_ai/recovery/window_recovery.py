@@ -4,6 +4,12 @@ from __future__ import annotations
 
 import asyncio
 
+from hs_bg_ai.platform_utils import (
+    activate_window_by_title,
+    default_window_title,
+    find_window_by_title,
+)
+
 from .base import BaseRecovery
 
 
@@ -19,8 +25,8 @@ class WindowRecovery(BaseRecovery):
     MAX_RETRIES = 3
     RETRY_DELAY = 3.0
 
-    def __init__(self, window_title: str = "炉石传说") -> None:
-        self._window_title = window_title
+    def __init__(self, window_title: str | None = None) -> None:
+        self._window_title = window_title or default_window_title()
         self._window_lost = False
 
     # ------------------------------------------------------------------
@@ -43,29 +49,11 @@ class WindowRecovery(BaseRecovery):
 
     def _find_window(self) -> bool:
         """Return ``True`` if the game window exists on this system."""
-        try:
-            import win32gui  # type: ignore
-
-            hwnd = win32gui.FindWindow(None, self._window_title)
-            return hwnd != 0
-        except ImportError:
-            # Non-Windows: assume window is present (test environments)
-            return True
+        return find_window_by_title(self._window_title)
 
     def _activate_window(self) -> bool:
         """Bring the game window to the foreground. Returns success flag."""
-        try:
-            import win32con  # type: ignore
-            import win32gui  # type: ignore
-
-            hwnd = win32gui.FindWindow(None, self._window_title)
-            if hwnd == 0:
-                return False
-            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-            win32gui.SetForegroundWindow(hwnd)
-            return True
-        except ImportError:
-            return False
+        return activate_window_by_title(self._window_title)
 
     # ------------------------------------------------------------------
     # Recovery

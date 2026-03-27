@@ -27,7 +27,7 @@ class LogWatcher:
     """
 
     def __init__(self, log_path: str | Path, *, seek_to_end: bool = True) -> None:
-        self._path = Path(log_path)
+        self._path = Path(log_path).expanduser().resolve()
         self._seek_to_end = seek_to_end
         self._running = False
         self._position: int = 0

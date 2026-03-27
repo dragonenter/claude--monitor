@@ -29,8 +29,17 @@ ai:
   refresh_limit: 3
 
 log:
+  # Leave empty to auto-detect based on platform:
+  #   Windows: %LOCALAPPDATA%Low\Blizzard Entertainment\Hearthstone\output_log.txt
+  #   macOS:   ~/Library/Logs/Unity/Player.log
   log_path: ""
   log_level: "INFO"
   log_file: "hs_bg_ai.log"
 
-game_window_title: "炉石传说"
+# Leave empty to auto-detect based on platform:
+#   Windows: "炉石传说"
+#   macOS:   "Hearthstone"
+game_window_title: ""
+
+# Auto-detected if empty. Valid values: "windows", "macos", "linux"
+platform: ""
